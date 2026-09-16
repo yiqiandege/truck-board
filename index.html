@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>出车作业看板</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --card:#fff; --line:#e5e8ee; --txt:#1f2937; --sub:#6b7280;
+    --blue:#2563eb; --red:#dc2626; --redbg:#fef2f2; --amber:#d97706; --amberbg:#fffbeb;
+    --green:#059669; --greenbg:#ecfdf5; --gray:#6b7280; --graybg:#f3f4f6;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;font-size:15px;padding-bottom:env(safe-area-inset-bottom)}
+  header{position:sticky;top:0;z-index:20;background:linear-gradient(135deg,#1d4ed8,#2563eb);color:#fff;padding:14px 14px 12px;box-shadow:0 2px 6px rgba(0,0,0,.08)}
+  header h1{font-size:17px;font-weight:600}
+  header .upd{font-size:11px;opacity:.85;margin-top:1px}
+  .searchwrap{margin-top:10px;position:relative}
+  .searchwrap input{width:100%;padding:10px 36px 10px 14px;border:none;border-radius:11px;font-size:15px;background:#fff;color:var(--txt);outline:none}
+  .searchwrap .clr{position:absolute;right:9px;top:50%;transform:translateY(-50%);width:22px;height:22px;border:none;background:#d1d5db;border-radius:50%;color:#fff;font-size:12px;display:none;line-height:1}
+  /* 搜索记忆 chips */
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .chips:empty{display:none}
+  .chip{display:inline-flex;align-items:center;gap:5px;padding:6px 10px 6px 14px;border-radius:20px;border:1.5px solid #c7d2fe;background:#eef2ff;color:#3730a3;font-size:14px;cursor:pointer;user-select:none}
+  .chip.on{border-color:var(--blue);background:#dbeafe;color:#1e40af;font-weight:600}
+  .chip .x{width:18px;height:18px;border:none;background:transparent;color:#818cf8;font-size:14px;line-height:1;padding:0;display:flex;align-items:center;justify-content:center}
+  .chip.on .x{color:#3b82f6}
+  /* 状态筛选 */
+  .tabs{display:flex;gap:6px;margin-top:11px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{flex-shrink:0;padding:6px 13px;border-radius:18px;border:1px solid rgba(255,255,255,.45);background:rgba(255,255,255,.15);font-size:13px;color:#fff;cursor:pointer}
+  .tab b{font-weight:600}
+  .tab.on{background:#fff;border-color:#fff;color:var(--blue)}
+  /* 类型筛选（整托/整件/散件） */
+  .ttabs{display:flex;gap:6px;margin-top:8px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+  .ttabs::-webkit-scrollbar{display:none}
+  .ttab{flex-shrink:0;padding:5px 13px;border-radius:18px;border:1px solid rgba(255,255,255,.45);background:rgba(255,255,255,.15);font-size:13px;color:#fff;cursor:pointer;opacity:.8}
+  .ttab.on{background:#fff;border-color:#fff;color:#1d4ed8;font-weight:600;opacity:1}
+  .ttab .cnt{font-size:11px;opacity:.85;margin-left:2px}
+  /* 结果区 */
+  .hint{padding:26px 24px;text-align:center;color:var(--sub);font-size:14px;line-height:1.7}
+  .results{padding:12px 12px 40px}
+  .sec-head{display:flex;align-items:baseline;justify-content:space-between;margin:14px 2px 8px}
+  .sec-head:first-child{margin-top:2px}
+  .sec-head .sn{font-size:16px;font-weight:700}
+  .sec-head .sm{font-size:11px;color:var(--sub)}
+  .row{background:var(--card);border-radius:10px;padding:10px 12px;margin-bottom:8px;box-shadow:0 1px 2px rgba(0,0,0,.04);border-left:4px solid transparent}
+  .row.st-u{border-left-color:var(--red)}
+  .row.st-d{border-left-color:var(--amber)}
+  .row.st-p{border-left-color:var(--green)}
+  .row.st-f{border-left-color:#9ca3af;opacity:.75}
+  .row .r1{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .row .cust{font-size:14px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .badge{flex-shrink:0;font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600}
+  .b-u{background:var(--redbg);color:var(--red)}
+  .b-d{background:var(--amberbg);color:var(--amber)}
+  .b-p{background:var(--greenbg);color:var(--green)}
+  .b-chk{background:#ede9fe;color:#6d28d9}
+  .b-gth{background:#e2e8f0;color:#334155}
+  .b-type{background:#eef2ff;color:#4338ca;margin-right:6px}
+  .b-line{background:#ecfeff;color:#0e7490;margin-right:4px}
+  .bwrap{display:flex;gap:4px;flex-shrink:0}
+  .row .r2{display:flex;flex-wrap:wrap;gap:5px 14px;margin-top:6px;font-size:13px;color:#374151}
+  .kv b{color:#111;font-weight:600}
+  .desk-big{display:inline-block;background:var(--greenbg);color:var(--green);font-weight:700;font-size:15px;padding:2px 10px;border-radius:8px}
+  .boxno{font-weight:700;color:var(--txt)}
+  .row .r3{font-size:11px;color:var(--sub);margin-top:4px}
+  .tsec{padding:8px 4px 2px;font-size:12px;color:var(--sub);font-weight:600}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>出车作业看板</h1>
+  <div class="upd" id="upd-time"></div>
+  <div class="searchwrap">
+    <input id="q" type="search" placeholder="搜索线路 / FO号 / 客户名称" enterkeyhint="search">
+    <button class="clr" id="qclr">×</button>
+  </div>
+  <div class="chips" id="chips"></div>
+  <div class="tabs" id="tabs"></div>
+  <div class="ttabs" id="ttabs"></div>
+</header>
+
+<div class="hint" id="hint">输入线路、FO号或客户名称搜索<br>搜索过的关键词会保存在上方，点击即可再次查看</div>
+<div class="results" id="results"></div>
+
+<script src="data.js?v=202609160020"></script>
+<script>
+const D = window.BOARD_DATA;
+const TYPE_NAME = {H:'整托', C:'整件', L:'散件'};
+const ST_NAME = {'':'未拣选', 'D':'拣选中', 'C':'拣选完成'};
+const ST_CLS = {'':'st-u', 'D':'st-d', 'C':'st-p'};
+const ST_BDG = {'':'b-u', 'D':'b-d', 'C':'b-p'};
+const LS_CHIPS = 'wb_search_chips';
+const LS_TAB = 'wb_status_tab';
+const LS_TTYP = 'wb_type_sel';
+
+/* 状态筛选为互斥阶段制：
+   未拣选  = 拣货状态空
+   拣选中  = 拣货状态 D
+   拣选完成 = 拣货状态 C 且未复核（复核状态非X）
+   已复核  = 复核状态 X 且未集货（集货状态空）
+   已集货  = 集货状态 X */
+const TABS = [
+  ['all','全部', null],
+  ['u','未拣选', r=>r.p===''],
+  ['d','拣选中', r=>r.p==='D'],
+  ['p','拣选完成', r=>r.p==='C' && r.c!=='X'],
+  ['chk','已复核', r=>r.c==='X' && r.g!=='X'],
+  ['gth','已集货', r=>r.g==='X'],
+];
+
+let chips = [];            // 搜索记忆
+let selected = new Set();  // 当前多选中的记忆（小写）
+let curTab = 'all';
+let ttSel = new Set();     // 类型多选：'H'整托 'C'整件 'L'散件（空=全部）
+let query = '';            // 搜索框当前文字（即时生效）
+
+/* ---------- 初始化 ---------- */
+try{ chips = JSON.parse(localStorage.getItem(LS_CHIPS)||'[]'); }catch(e){ chips=[]; }
+if(!Array.isArray(chips)) chips=[];
+try{
+  const t = localStorage.getItem(LS_TAB);
+  if(TABS.some(x=>x[0]===t)) curTab = t;
+}catch(e){}
+try{
+  const ts = JSON.parse(localStorage.getItem(LS_TTYP)||'[]');
+  if(Array.isArray(ts)) ts.forEach(k=>{ if(['H','C','L'].includes(k)) ttSel.add(k); });
+}catch(e){}
+
+const qInput = document.getElementById('q');
+qInput.addEventListener('input', e=>{
+  query = e.target.value.trim();
+  document.getElementById('qclr').style.display = query?'block':'none';
+  render();
+});
+qInput.addEventListener('keydown', e=>{
+  if(e.key==='Enter'){ e.target.blur(); saveChip(query); }   // 回车 → 存为记忆
+});
+qInput.addEventListener('blur', ()=>{ if(query) saveChip(query); });
+document.getElementById('qclr').addEventListener('click', ()=>{
+  query=''; qInput.value='';
+  document.getElementById('qclr').style.display='none';
+  render();
+});
+
+function saveChip(text){
+  if(!text) return;
+  const key = text.toLowerCase();
+  if(!chips.some(c=>c.toLowerCase()===key)){
+    chips.unshift(text);
+    if(chips.length>12) chips.length=12;
+    persistChips();
+  }
+  renderChips();
+}
+function removeChip(i){
+  const key = chips[i].toLowerCase();
+  selected.delete(key);
+  chips.splice(i,1);
+  persistChips();
+  renderChips(); render();
+}
+function persistChips(){ localStorage.setItem(LS_CHIPS, JSON.stringify(chips)); }
+
+function renderChips(){
+  document.getElementById('chips').innerHTML = chips.map((c,i)=>
+    `<span class="chip ${selected.has(c.toLowerCase())?'on':''}" data-i="${i}">${esc(c)}<button class="x" data-x="${i}" aria-label="删除">×</button></span>`
+  ).join('');
+}
+document.getElementById('chips').addEventListener('click', e=>{
+  const x = e.target.closest('.x');
+  if(x){ removeChip(+x.dataset.x); return; }
+  const chip = e.target.closest('.chip');
+  if(chip){
+    const key = chips[+chip.dataset.i].toLowerCase();
+    if(selected.has(key)) selected.delete(key);   // 多选：再点取消
+    else selected.add(key);
+    renderChips(); render();
+  }
+});
+
+function renderTabs(){
+  const el = document.getElementById('tabs');
+  if(!el) return;   // 防御：容器缺失时不让脚本崩掉
+  el.innerHTML = TABS.map(([k,n])=>
+    `<div class="tab ${curTab===k?'on':''}" data-k="${k}">${n}</div>`).join('');
+}
+document.getElementById('tabs').addEventListener('click', e=>{
+  const t = e.target.closest('.tab');
+  if(!t) return;
+  curTab = t.dataset.k;
+  localStorage.setItem(LS_TAB, curTab);
+  renderTabs(); render();
+});
+
+/* 类型筛选（整托/整件/散件，多选；全不选=全部） */
+const TTYPES = [['H','整托'],['C','整件'],['L','散件']];
+function renderTTabs(){
+  const el = document.getElementById('ttabs');
+  if(!el) return;   // 防御：容器缺失时不让脚本崩掉
+  el.innerHTML = TTYPES.map(([k,n])=>
+    `<div class="ttab ${ttSel.has(k)?'on':''}" data-k="${k}">${n}${ttSel.has(k)?' ✓':''}</div>`).join('');
+}
+const ttabsEl = document.getElementById('ttabs');
+if(ttabsEl) ttabsEl.addEventListener('click', e=>{
+  const t = e.target.closest('.ttab');
+  if(!t) return;
+  const k = t.dataset.k;
+  if(ttSel.has(k)) ttSel.delete(k);
+  else ttSel.add(k);
+  localStorage.setItem(LS_TTYP, JSON.stringify([...ttSel]));
+  renderTTabs(); render();
+});
+
+/* ---------- 数据匹配 ---------- */
+function matchRoutes(q){
+  if(!q) return [];
+  const s = q.toLowerCase();
+  return D.routes.filter(r =>
+    r.name.toLowerCase().includes(s) ||
+    r.fo.some(f=>f.toLowerCase().includes(s)) ||
+    r.cust.some(c=>c.toLowerCase().includes(s))
+  );
+}
+function activeRoutes(){
+  // 多选：选中的记忆标签 + 搜索框当前文字，取并集
+  const set = new Map();
+  [...selected, ...(query?[query.toLowerCase()]:[])].forEach(q=>{
+    matchRoutes(q).forEach(r=>set.set(r.name, r));
+  });
+  return [...set.values()];
+}
+
+/* ---------- 渲染 ---------- */
+function activeKeywords(){
+  return [...selected, ...(query?[query.toLowerCase()]:[])];
+}
+
+function commonFilter(rt,x){
+  const fn = TABS.find(t=>t[0]===curTab)[2];
+  if(fn && !fn(x)) return false;              // 状态筛选
+  if(ttSel.size && !ttSel.has(x.t)) return false; // 类型筛选
+  return rowPasses(rt,x);                     // 搜索关键词行级过滤
+}
+
+function render(){
+  const results = document.getElementById('results');
+  const hint = document.getElementById('hint');
+  const routes = activeRoutes();
+  if(!routes.length){
+    hint.style.display='block';
+    results.innerHTML='';
+    hint.innerHTML = query
+      ? '没有匹配「'+esc(query)+'」的线路、FO 或客户'
+      : '输入线路、FO号或客户名称搜索<br>搜索过的关键词保存在上方，点击标签可多选叠加查看';
+    return;
+  }
+  hint.style.display='none';
+  results.innerHTML = flatHTML(routes);
+}
+
+/* 平铺模式：所有行合成一个列表按统一排序显示（单选、多选、FO 均如此） */
+function flatHTML(routes){
+  let rows = [];
+  routes.forEach(rt=>{
+    rt.rows.forEach(x=>{
+      if(!commonFilter(rt,x)) return;
+      x.ln = rt.name;               // 行上挂线路名，供显示
+      rows.push(x);
+    });
+  });
+  const title = query || [...selected].join(' + ') || '全部';
+  let html = `<div class="sec-head"><span class="sn">${esc(title)}</span>
+    <span class="sm">${rows.length} 行</span></div>`;
+  if(!rows.length) return html + '<div class="tsec">该筛选条件下暂无作业行</div>';
+  rows.sort(sortRows);
+  rows.forEach(x=>{ html += rowHTML(x); });
+  return html;
+}
+
+/* 每个关键词单独判断：命中线路名/FO号 → 整条线路的行都要；
+   只命中客户名 → 只保留该客户的行。多个关键词取并集 */
+function rowPasses(rt,x){
+  const kws = activeKeywords();
+  if(!kws.length) return true;
+  for(const kw of kws){
+    if(rt.name.toLowerCase().includes(kw)) return true;         // 线路名 → 整线
+    if(rt.fo.some(f=>f.toLowerCase().includes(kw))) return true; // FO号 → 整线
+    if(String(x.cust).toLowerCase().includes(kw)) return true;   // 客户名 → 仅该客户
+  }
+  return false;
+}
+
+/* 状态优先级：未拣选0 → 拣选中1 → 拣选完成2 → 已复核3 → 已集货4 */
+function stRank(x){
+  if(x.p==='') return 0;
+  if(x.p==='D') return 1;
+  if(x.g==='X') return 4;
+  if(x.c==='X') return 3;
+  return 2;
+}
+
+/* 统一排序：先状态，再复核台，再周转箱号 */
+function sortRows(a,b){
+  const ra=stRank(a), rb=stRank(b);
+  if(ra!==rb) return ra-rb;
+  const da=numOrBig(a.desk), db=numOrBig(b.desk);
+  if(da!==db) return da<db?-1:1;
+  const ba=numOrBig(a.box), bb=numOrBig(b.box);
+  if(ba!==bb) return ba-bb;
+  return a.loc<b.loc?-1:(a.loc>b.loc?1:0);
+}
+
+function rowHTML(x){
+  const doneBoth = x.c==='X'&&x.g==='X';
+  // 状态分段显示：拣选状态 + 已复核 + 已集货 各自独立徽章
+  let badges = `<span class="badge ${ST_BDG[x.p]}">${ST_NAME[x.p]}</span>`;
+  if(x.c==='X') badges += `<span class="badge b-chk">已复核</span>`;
+  if(x.g==='X') badges += `<span class="badge b-gth">已集货</span>`;
+  let r2='';
+  const tagKv = x.tag ? `<span class="kv">标签 <b>${esc(x.tag)}</b></span>` : '';
+  if(x.t==='L'){
+    if(x.p==='C' && x.desk){
+      r2 = `<span class="kv">复核台 <span class="desk-big">${esc(x.desk)}</span></span>
+            <span class="kv">周转箱 <span class="boxno">${esc(x.box)}</span></span>${tagKv}`;
+    }else{
+      r2 = `<span class="kv">周转箱 <span class="boxno">${esc(x.box)||'—'}</span></span>${tagKv}`;
+    }
+  }else{
+    r2 = `<span class="kv">货位 <b>${esc(x.loc)||'—'}</b></span>
+          <span class="kv">${esc(x.name)||''}</span>
+          <span class="kv">件数 <b>${x.qty}</b></span>${tagKv}` +
+        (x.p==='C'&&x.desk ? `<span class="kv">复核台 <span class="desk-big">${esc(x.desk)}</span></span>` : '');
+  }
+  return `<div class="row ${doneBoth?'st-f':ST_CLS[x.p]}">
+    <div class="r1"><span class="cust"><span class="badge b-line">${esc(x.ln||'')}</span><span class="badge b-type">${TYPE_NAME[x.t]}</span>${esc(x.cust)}</span><span class="bwrap">${badges}</span></div>
+    <div class="r2">${r2}</div>
+  </div>`;
+}
+
+function numOrBig(v){const n=parseInt(v,10);return isNaN(n)?Number.MAX_SAFE_INTEGER:n;}
+function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/'/g,"&#39;").replace(/"/g,'&quot;');}
+
+renderChips();
+renderTabs();
+renderTTabs();
+render();
+</script>
+</body>
+</html>
