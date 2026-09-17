@@ -85,9 +85,50 @@
 <div class="hint" id="hint">输入线路、FO号或客户名称搜索<br>搜索过的关键词会保存在上方，点击即可再次查看</div>
 <div class="results" id="results"></div>
 
-<script src="data.js?v=20260916214524"></script>
 <script>
-const D = window.BOARD_DATA;
+/* ===== 数据加载：固定网址 + 实时数据 =====
+   固定入口：GitHub Pages（网址永远不变，司机收藏这一个就够）
+   数据源1：raw.githubusercontent.com —— EXE 推送后几秒生效（绕开 Pages 构建延迟）
+   数据源2：本站同域 data.js —— Pages 构建完成后生效（兜底）
+   页面每 30 秒轮询 v.json（几十字节，几乎不费流量），版本变了才拉完整 data.js */
+const DATA_REPO = {owner:'yiqiandege', repo:'truck-board', branch:'main'};
+const SRC = [
+  {v:`https://raw.githubusercontent.com/${DATA_REPO.owner}/${DATA_REPO.repo}/${DATA_REPO.branch}/v.json?t=`,
+   d:`https://raw.githubusercontent.com/${DATA_REPO.owner}/${DATA_REPO.repo}/${DATA_REPO.branch}/data.js?t=`},
+  {v:'v.json?v=', d:'data.js?v='}
+];
+let D = null, lastVer = '';
+function jget(url, ms){
+  return new Promise((ok, no)=>{
+    const c = new AbortController(); const t = setTimeout(()=>c.abort(), ms);
+    fetch(url, {signal:c.signal, cache:'no-store'})
+      .then(r=> r.ok ? r.json() : Promise.reject(r.status))
+      .then(j=>{ clearTimeout(t); ok(j); })
+      .catch(e=>{ clearTimeout(t); no(e); });
+  });
+}
+function jsLoad(src){
+  return new Promise((ok, no)=>{
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload  = ()=>{ s.remove(); ok(); };
+    s.onerror = ()=>{ s.remove(); no(new Error('load fail')); };
+    document.head.appendChild(s);
+  });
+}
+async function syncData(first){
+  for(const s of SRC){
+    try{
+      const v = await jget(s.v + Date.now(), 6000);
+      const nv = String((v && v.v) || '');
+      if(!nv) continue;
+      if(!first && D && nv === lastVer) return false;  // 没有新版本，不动
+      await jsLoad(s.d + nv + '.' + Date.now());
+      if(window.BOARD_DATA){ D = window.BOARD_DATA; lastVer = nv; return true; }
+    }catch(e){ /* 试下一个数据源 */ }
+  }
+  return false;
+}
 const TYPE_NAME = {H:'整托', C:'整件', L:'散件'};
 const ST_NAME = {'':'未拣选', 'D':'拣选中', 'C':'拣选完成'};
 const ST_CLS = {'':'st-u', 'D':'st-d', 'C':'st-p'};
@@ -346,7 +387,23 @@ function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').
 renderChips();
 renderTabs();
 renderTTabs();
-render();
+
+async function boot(first){
+  const hint = document.getElementById('hint');
+  if(first) hint.innerHTML = '正在加载数据…';
+  const changed = await syncData(first);
+  if(D && (first || changed)){
+    document.getElementById('upd-time').textContent = '数据更新 ' + D.updated;
+    render();                                  // 刷新数据后重渲染（筛选条件都保留）
+  }else if(!D && first){
+    hint.innerHTML = '数据加载失败，请检查网络后重试<br>（下拉刷新页面）';
+  }
+}
+boot(true);
+setInterval(()=>{ if(document.visibilityState !== 'hidden') boot(false); }, 30000);
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState === 'visible') boot(false);   // 切回页面立即查一次
+});
 </script>
 </body>
 </html>
